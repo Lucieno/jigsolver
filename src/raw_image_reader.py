@@ -1,10 +1,11 @@
 import pdb
-import cv2
-import numpy as np
-from matplotlib import pyplot as plt
 import os
 import sys
 from itertools import combinations, product
+import cv2
+import numpy as np
+from matplotlib import pyplot as plt
+from scipy import optimize
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -29,6 +30,9 @@ def save_res(func):
             if name != '': cv2.imwrite(preprocessed_dir + '%s.jpg'%name, res_img.astype('uint8'))
         return res_img
     return func_wrapper
+    
+def img_to_points(img_input):
+    return np.array(np.where(img_input > 0)).T
 
 def find_contour(img_input, name=''):
     color_min, color_max = 100, 255
@@ -61,6 +65,19 @@ def find_edge(img_input, name=''):
     img_edge = cv2.Canny(img_input, 100, 200)
     return img_edge
 
+@save_res
+def focus(img_input, name=''):
+    img_contour = find_contour(img_input)
+    cropped     = cropper(img_contour)
+    return cropped
+
+@save_res
+def edging(img_input, name=''):
+    img_contour = find_contour(img_input)
+    cropped     = cropper(img_contour)
+    edge        = find_edge(cropped)
+    return edge
+
 def morop(img_input, op, ksize, name):
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (ksize, ksize))
     res_img = cv2.morphologyEx(img_input, op, kernel)
@@ -91,6 +108,12 @@ def kclustering_coordinate(img_input):
     # n_cluster is 12 becuase there are 16 significant turning points on a opened and closed piece
     kmeans = KMeans(n_clusters=6, random_state=0).fit(X)
     return map(lambda p: (int(p[0]), int(p[1])), kmeans.cluster_centers_)
+
+@save_res
+def connect_to_img(points, shape, name=''):
+    res_img = np.zeros(shape, dtype="uint8")  
+    cv2.drawContours(res_img, [reorder_counterClockwise(points)], -1, 255, thickness=1)
+    return res_img
 
 @save_res
 def coordinate_to_img(coordinate, shape, name=''):
@@ -158,9 +181,6 @@ def crop_first(img_input, name=''):
     kclustering(cornered, name='crop_first_kclustering')
     clustering_to_ertrame(cornered, name='crop_first_largest')
 
-def img_to_points(img_input):
-    return np.array(np.where(img_input > 0)).T
-
 def reorder_counterClockwise(points):
     return points[counterClockwiseSort(points)]
 
@@ -172,7 +192,7 @@ class Derivative(object):
 class Sobel_Derivative(Derivative):
     @classmethod
     def derivative_func(cls, img, x_order, y_order):
-        return cv2.Sobel(img,cv2.CV_64F, x_order, y_order,ksize=5)
+        return cv2.Sobel(img,cv2.CV_64F, x_order, y_order,ksize=3)
 
     @classmethod
     @save_res
@@ -204,36 +224,94 @@ class Positive_Kernel_Derivative(Derivative):
                 [[0, -3,  3],
                 [0, -10, 10],
                 [0, -3,   3]])
+    first_derivative_kernel_x = first_derivative_kernel
+    first_derivative_kernel_y = first_derivative_kernel.T
 
     second_derivative_kernel = np.array(
                 [[  0, 0,  3, -6,   3],
                 [  0, 0, 10, -20, 10],
                 [  0, 0,  3, -6,   3]])
 
-    @classmethod
     @save_res
     def derivative(cls, img_input, kernel, name=''):
         return cv2.filter2D(img_input, cv2.CV_64F, kernel)
 
-    @classmethod
     def generic_derivative(cls, img, x_order, y_order, name=''):
         assert(x_order == 0 or y_order == 0)
         if x_order == 1:
-            kernel = cls.first_derivative_kernel
+            kernel = cls.first_derivative_kernel_x
             res = cls.derivative(img, kernel, name=name)
         if x_order == 2:
-            kernel = cls.first_derivative_kernel.T
+            kernel = cls.second_derivative_kernel
             res = cls.derivative(img, kernel, name=name)
         if y_order == 1:
-            kernel = cls.second_derivative_kernel
+            kernel = cls.first_derivative_kernel_y.T
             res = cls.derivative(img, kernel, name=name)
         if y_order == 2:
             kernel = cls.second_derivative_kernel.T
             res = cls.derivative(img, kernel, name=name)
         return res
 
-def point_curvature(points):
-    pass
+class Custom_Kernel_Derivative(Positive_Kernel_Derivative):
+    def set_first_kernel(cls, kernel_):
+        cls.first_derivative_kernel = kernel_
+        cls.first_derivative_kernel_x = kernel_
+        cls.first_derivative_kernel_y = kernel_.T
+
+    def set_first_kernel_x(cls, kernel_):
+        cls.first_derivative_kernel_x = kernel_
+
+    def set_first_kernel_y(cls, kernel_):
+        cls.first_derivative_kernel_y = kernel_
+
+@save_res
+def find_top_right_corner(img_input, name=''):
+    half_h, half_w = np.array(img_input.shape) / 2
+    #picked_img = img_input[:half_h, half_w:] * 0.05
+    picked_img = img_input * 0.05
+    deriv = Custom_Kernel_Derivative()
+    kernel_x = np.array(
+        [[ 10, 7, 3, 0, 0, 0],
+         [ 10, 7, 3, 0, 0, 0],
+         [ 10, 7, 3, 0, 0, 0],
+         [ 10, 7, 3, 0, 0, 0],
+         [ 10, 7, 3, 0, 0, 0]], 
+        dtype='float64')
+    kernel_x[0, :] *= 0.2
+    kernel_x[1, :] *= 0.5
+    kernel_x[3, :] *= 0.5
+    kernel_x[4, :] *= 0.2
+    kernel_y = kernel_x[:, ::-1].T
+    deriv.set_first_kernel_x(kernel_x)
+    deriv.set_first_kernel_y(kernel_y)
+    xder = deriv.generic_derivative(picked_img, 1, 0, name=name+'_derivative_x')
+    yder = deriv.generic_derivative(picked_img, 0, 1, name=name+'_derivative_y')
+    sum_der = np.abs(xder) + np.abs(yder)
+    return sum_der
+
+@save_res
+def find_square_corner(img_input, name=''):
+    deriv = Custom_Kernel_Derivative()
+    kernel = np.array(
+        [[-3, -7, -10, 10, 7, 3],
+         [-3, -7, -10, 10, 7, 3],
+         [-3, -7, -10, 10, 7, 3],
+         [-3, -7, -10, 10, 7, 3],
+         [-3, -7, -10, 10, 7, 3]], 
+        dtype='float64')
+    kernel[0, :] *= 0.2
+    kernel[1, :] *= 0.5
+    kernel[3, :] *= 0.5
+    kernel[4, :] *= 0.2
+    deriv.set_first_kernel(kernel)
+    xder = deriv.generic_derivative(img_input, 1, 0, name=name+'_derivative_x')
+    yder = deriv.generic_derivative(img_input, 0, 1, name=name+'_derivative_y')
+    sum_der = np.abs(xder) + np.abs(yder)
+    res_img = np.zeros(img_input.shape, dtype='float64')
+    res_img[np.where(img_input > 0)] = 1.
+    res_img = res_img * sum_der
+    res_img = sum_der
+    return res_img * 0.01
 
 @save_res
 def find_curvature(img_input, name=''):
@@ -256,7 +334,7 @@ def signed_curvature(x1, x2, y1, y2, name=''):
     return color
     #return np.abs(res)
 
-class Curvature(object):
+class Derivative_Curvature(object):
     @classmethod
     def __init__(cls, derivative_type, name=''):
         cls.derivative_type = derivative_type
@@ -274,10 +352,68 @@ class Curvature(object):
         signed      = signed_curvature(xder, x2der, yder, y2der, name=cls.name+'_curvature_signed')
         return signed
 
+def find_polygon_points(img_input):
+    return cv2.approxPolyDP(img_to_points(img_input), 30, True)
+
+def find_polygon_img(img_input, name=''):
+    return connect_to_img(np.squeeze(find_polygon_points(img_input))[:, (1, 0)], 
+            img_input.shape, name=name)
+
+class Radius_Curvature(object):
+    @classmethod
+    def __init__(cls, name=''):
+        cls.name = name
+
+    @classmethod
+    def find_circle(cls, points):
+        x, y = points[0], points[1]
+
+        def calc_R(xc, yc):
+            """ calculate the distance of each 2D points from the center (xc, yc) """
+            return np.sqrt((x-xc)**2 + (y-yc)**2)
+
+        def f_2(c):
+            """ calculate the algebraic distance between the data points and 
+                the mean circle centered at c=(xc, yc) 
+            """
+            Ri = calc_R(*c)
+            return Ri - Ri.mean()
+
+        center_estimate = np.mean(x), np.mean(y)
+        center_2, ier = optimize.leastsq(f_2, center_estimate)
+        xc_2, yc_2 = center_2
+        Ri_2       = calc_R(*center_2)
+        R_2        = Ri_2.mean()
+        residu_2   = sum((Ri_2 - R_2)**2)
+        return center_2, R_2
+
+    @classmethod
+    @save_res
+    def find_curvature(cls, img_input, name=''):
+        all_points = img_to_points(img_input)
+        kSize = 3
+        res_img = np.zeros(img_input.shape)
+        tar_x, tar_y = 153, 39
+        for y, x in all_points:
+            neighbor_block = img_input[max(0, y - kSize):(y + kSize), max(0, x - kSize):(x + kSize)]
+            neighbor_points = img_to_points(neighbor_block)
+            #pdb.set_trace()
+            _, R = cls.find_circle(neighbor_points)
+            # if ((x - tar_x)**2 + (y - tar_y)**2) < 20: print x, y, R
+            # if R > 100.: print x, y, R
+            #print x, y, R
+            #res_img[y, x] = R
+            res_img[y, x] = 1. / max(R, .0001)
+            #res_img[y, x] = 1.
+        return res_img * 255.
+        #return np.log(res_img) * 255. / np.max(np.log(res_img))
+
 @save_res
 def ConvHull(img_input, name=''):
     img_contour = find_contour(img_input)
     cropped     = cropper(img_contour)
+    img = np.zeros(list(cropped.shape) + [3])
+    img[:, :, 0] = cropped
     ret, thresh = cv2.threshold(cropped, 127, 255,0)
     contours,hierarchy = cv2.findContours(thresh,2,1)
     cnt = contours[0]
@@ -299,7 +435,13 @@ def ConvHull(img_input, name=''):
 
 #openclose_first(imgray)
 #crop_first(imgray)
-Curvature(Positive_Kernel_Derivative(), 'posfirst').find_curvature(imgray)
-Curvature(Sobel_Derivative(), 'sobel').find_curvature(imgray)
-Curvature(Scharr_Derivative(), 'scharr').find_curvature(imgray)
-ConvHull(imgray)
+Derivative_Curvature(Positive_Kernel_Derivative(), 'posfirst').find_curvature(imgray)
+Derivative_Curvature(Sobel_Derivative(), 'sobel').find_curvature(imgray)
+Derivative_Curvature(Scharr_Derivative(), 'scharr').find_curvature(imgray)
+Radius_Curvature().find_curvature(edging(imgray, name='edging'), name='radius_curvature')
+find_square_corner(edging(imgray), name='square_corner')
+find_top_right_corner(edging(imgray), name='top_right')
+#find_polygon_img(edging(imgray), name='polygon')
+#find_polygon_img(rectanglize(focus(imgray)), name='rectanglized_polygon')
+#ConvHull(imgray)
+#connect_to_img(np.array([[1, 1], [18, 18], [1, 18], [18, 1]]), [20, 20], name='square')
