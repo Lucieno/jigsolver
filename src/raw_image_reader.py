@@ -210,8 +210,9 @@ class Positive_Kernel_Derivative(Derivative):
                 [  0, 0, 10, -20, 10],
                 [  0, 0,  3, -6,   3]])
 
+    @classmethod
     @save_res
-    def derivative(img_input, kernel, name=''):
+    def derivative(cls, img_input, kernel, name=''):
         return cv2.filter2D(img_input, cv2.CV_64F, kernel)
 
     @classmethod
@@ -219,16 +220,16 @@ class Positive_Kernel_Derivative(Derivative):
         assert(x_order == 0 or y_order == 0)
         if x_order == 1:
             kernel = cls.first_derivative_kernel
-            res = cls.derivative(img_input, kernel, name=name)
+            res = cls.derivative(img, kernel, name=name)
         if x_order == 2:
             kernel = cls.first_derivative_kernel.T
-            res = cls.derivative(img_input, kernel, name=name)
+            res = cls.derivative(img, kernel, name=name)
         if y_order == 1:
             kernel = cls.second_derivative_kernel
-            res = cls.derivative(img_input, kernel, name=name)
+            res = cls.derivative(img, kernel, name=name)
         if y_order == 2:
             kernel = cls.second_derivative_kernel.T
-            res = cls.derivative(img_input, kernel, name=name)
+            res = cls.derivative(img, kernel, name=name)
         return res
 
 def point_curvature(points):
@@ -242,12 +243,12 @@ def find_curvature(img_input, name=''):
 @save_res
 def signed_curvature(x1, x2, y1, y2, name=''):
     res = np.divide((x1 * y2 - y1 * x2), np.power(x1*x1 + y1*y1, 1.5))
-    print np.sum((x1 * y2 - y1 * x2) > 0)
-    print np.sum(np.power(x1*x1 + y1*y1, 1.5) > 0)
-    print np.sum(np.nan_to_num(res) > 0)
-    print 'max: ', np.max(np.nan_to_num(res))
-    print 'min: ', np.min(np.nan_to_num(res))
-    print res.shape
+    # print np.sum((x1 * y2 - y1 * x2) > 0)
+    # print np.sum(np.power(x1*x1 + y1*y1, 1.5) > 0)
+    # print np.sum(np.nan_to_num(res) > 0)
+    # print 'max: ', np.max(np.nan_to_num(res))
+    # print 'min: ', np.min(np.nan_to_num(res))
+    # print res.shape
     color = np.zeros(list(res.shape) + [3])
     for (i, j) in product(range(res.shape[0]), range(res.shape[1])):
         if res[i, j] > 0: color[i, j, 1] = res[i, j] * 255 * 255
@@ -273,7 +274,32 @@ class Curvature(object):
         signed      = signed_curvature(xder, x2der, yder, y2der, name=cls.name+'_curvature_signed')
         return signed
 
+@save_res
+def ConvHull(img_input, name=''):
+    img_contour = find_contour(img_input)
+    cropped     = cropper(img_contour)
+    ret, thresh = cv2.threshold(cropped, 127, 255,0)
+    contours,hierarchy = cv2.findContours(thresh,2,1)
+    cnt = contours[0]
+
+    hull = cv2.convexHull(cnt,returnPoints = False)
+    defects = cv2.convexityDefects(cnt,hull)
+
+    for i in range(defects.shape[0]):
+        s,e,f,d = defects[i,0]
+        start = tuple(cnt[s][0])
+        end = tuple(cnt[e][0])
+        far = tuple(cnt[f][0])
+        cv2.line(img,start,end,[0,255,0],2)
+        cv2.circle(img,far,5,[0,0,255],-1)
+
+    cv2.imshow('img',img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 #openclose_first(imgray)
 #crop_first(imgray)
-sobel_curvature = Curvature(Sobel_Derivative(), 'sobel')
-sobel_curvature.find_curvature(imgray)
+Curvature(Positive_Kernel_Derivative(), 'posfirst').find_curvature(imgray)
+Curvature(Sobel_Derivative(), 'sobel').find_curvature(imgray)
+Curvature(Scharr_Derivative(), 'scharr').find_curvature(imgray)
+ConvHull(imgray)
