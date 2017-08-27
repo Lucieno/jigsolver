@@ -268,29 +268,59 @@ def find_max_points(img_input):
     v = np.argmax(img_input) 
     return (v / img_input.shape[1], v % img_input.shape[1])
 
+top_right_kernel = np.array(
+    [[-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [  3,   3,   3,   3,   3,   3, -10, -10, -10, -10],
+     [ 10,  10,  10,  10,  10,   3, -10, -10, -10, -10],
+     [  3,   3,   3,   3,  10,   3, -10, -10, -10, -10],
+     [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
+     [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
+     [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
+     [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10]], 
+    dtype='float64')
+
 @save_res
-def find_top_right_corner(img_input, name=''):
-    half_h, half_w = np.array(img_input.shape) / 2
-    #picked_img = img_input[:half_h, half_w:] * 0.05
-    picked_img = img_input * 0.005
-    deriv = Custom_Kernel_Derivative()
-    kernel = np.array(
-        [[-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
-         [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
-         [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
-         [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
-         [  3,   3,   3,   3,   3,   3, -10, -10, -10, -10],
-         [ 10,  10,  10,  10,  10,   3, -10, -10, -10, -10],
-         [  3,   3,   3,   3,  10,   3, -10, -10, -10, -10],
-         [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
-         [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
-         [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
-         [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10]], 
-        dtype='float64')
+def filter_corner(picked_img , kernel, name=''):
     res_img = cv2.filter2D(picked_img, cv2.CV_64F, kernel)
     res_img[np.where(res_img < 0.)] = 0.
-    print find_max_points(res_img)
     return res_img
+
+def find_top_right_corner(img_input, name=''):
+    half_h, half_w = np.array(img_input.shape) / 2
+    picked_img = img_input[:half_h, half_w:] * 0.005
+    y, x = find_max_points(filter_corner(picked_img, top_right_kernel, name=name))
+    return y, x + half_w
+
+def find_top_right_corner(img_input, name=''):
+    half_h, half_w = np.array(img_input.shape) / 2
+    picked_img = img_input[:half_h, half_w:] * 0.005
+    kernel = top_right_kernel
+    y, x = find_max_points(filter_corner(picked_img, kernel, name=name))
+    return y, x + half_w
+
+def find_top_left_corner(img_input, name=''):
+    half_h, half_w = np.array(img_input.shape) / 2
+    picked_img = img_input[:half_h, :half_w] * 0.005
+    kernel = top_right_kernel[:, ::-1]
+    y, x = find_max_points(filter_corner(picked_img, kernel, name=name))
+    return y, x
+
+def find_bottom_left_corner(img_input, name=''):
+    half_h, half_w = np.array(img_input.shape) / 2
+    picked_img = img_input[half_h:, :half_w] * 0.005
+    kernel = top_right_kernel[::-1, ::-1]
+    y, x = find_max_points(filter_corner(picked_img, kernel, name=name))
+    return y + half_h, x
+
+def find_bottom_right_corner(img_input, name=''):
+    half_h, half_w = np.array(img_input.shape) / 2
+    picked_img = img_input[half_h:, half_w:] * 0.005
+    kernel = top_right_kernel[::-1, :]
+    y, x = find_max_points(filter_corner(picked_img, kernel, name=name))
+    return y + half_h, x + half_w
 
 @save_res
 def find_square_corner(img_input, name=''):
@@ -443,7 +473,10 @@ Derivative_Curvature(Sobel_Derivative(), 'sobel').find_curvature(imgray)
 Derivative_Curvature(Scharr_Derivative(), 'scharr').find_curvature(imgray)
 Radius_Curvature().find_curvature(edging(imgray, name='edging'), name='radius_curvature')
 find_square_corner(edging(imgray), name='square_corner')
-find_top_right_corner(edging(imgray), name='top_right')
+print find_top_right_corner(edging(imgray), name='top_right')
+print find_top_left_corner(edging(imgray), name='top_left')
+print find_bottom_left_corner(edging(imgray), name='bottom_left')
+print find_bottom_right_corner(edging(imgray), name='bottom_right')
 #find_polygon_img(edging(imgray), name='polygon')
 #find_polygon_img(rectanglize(focus(imgray)), name='rectanglized_polygon')
 #ConvHull(imgray)
