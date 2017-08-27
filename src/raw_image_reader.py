@@ -264,30 +264,33 @@ class Custom_Kernel_Derivative(Positive_Kernel_Derivative):
     def set_first_kernel_y(cls, kernel_):
         cls.first_derivative_kernel_y = kernel_
 
+def find_max_points(img_input):
+    v = np.argmax(img_input) 
+    return (v / img_input.shape[1], v % img_input.shape[1])
+
 @save_res
 def find_top_right_corner(img_input, name=''):
     half_h, half_w = np.array(img_input.shape) / 2
     #picked_img = img_input[:half_h, half_w:] * 0.05
-    picked_img = img_input * 0.05
+    picked_img = img_input * 0.005
     deriv = Custom_Kernel_Derivative()
-    kernel_x = np.array(
-        [[ 10, 7, 3, 0, 0, 0],
-         [ 10, 7, 3, 0, 0, 0],
-         [ 10, 7, 3, 0, 0, 0],
-         [ 10, 7, 3, 0, 0, 0],
-         [ 10, 7, 3, 0, 0, 0]], 
+    kernel = np.array(
+        [[-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+         [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+         [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+         [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+         [  3,   3,   3,   3,   3,   3, -10, -10, -10, -10],
+         [ 10,  10,  10,  10,  10,   3, -10, -10, -10, -10],
+         [  3,   3,   3,   3,  10,   3, -10, -10, -10, -10],
+         [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
+         [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
+         [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
+         [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10]], 
         dtype='float64')
-    kernel_x[0, :] *= 0.2
-    kernel_x[1, :] *= 0.5
-    kernel_x[3, :] *= 0.5
-    kernel_x[4, :] *= 0.2
-    kernel_y = kernel_x[:, ::-1].T
-    deriv.set_first_kernel_x(kernel_x)
-    deriv.set_first_kernel_y(kernel_y)
-    xder = deriv.generic_derivative(picked_img, 1, 0, name=name+'_derivative_x')
-    yder = deriv.generic_derivative(picked_img, 0, 1, name=name+'_derivative_y')
-    sum_der = np.abs(xder) + np.abs(yder)
-    return sum_der
+    res_img = cv2.filter2D(picked_img, cv2.CV_64F, kernel)
+    res_img[np.where(res_img < 0.)] = 0.
+    print find_max_points(res_img)
+    return res_img
 
 @save_res
 def find_square_corner(img_input, name=''):
