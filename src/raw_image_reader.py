@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 from matplotlib import pyplot as plt
 from scipy import optimize
+from collections import deque
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -17,10 +18,6 @@ preprocessed_dir = './data/preprocessed/'
 def ada_show(img, name="image"):
     cv2.imshow(name, cv2.resize(img, display_size))
     cv2.waitKey(0)
-
-# Load images
-img_path = './data/raw_data/puzzle26082017_6.jpg'
-imgray = cv2.imread(img_path, cv2.CV_LOAD_IMAGE_GRAYSCALE)
 
 def save_res(func):
     def func_wrapper(*args, **kwargs):
@@ -269,17 +266,25 @@ def find_max_points(img_input):
     return (v / img_input.shape[1], v % img_input.shape[1])
 
 top_right_kernel = np.array(
-    [[-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
-     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
-     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
-     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
-     [  3,   3,   3,   3,   3,   3, -10, -10, -10, -10],
-     [ 10,  10,  10,  10,  10,   3, -10, -10, -10, -10],
-     [  3,   3,   3,   3,  10,   3, -10, -10, -10, -10],
-     [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
-     [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
-     [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10],
-     [-10, -10, -10,   3,  10,   3, -10, -10, -10, -10]], 
+    [[-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10, -10],
+     [  5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [  5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [ 10,  10,  10,  10,  10,  10,  10,  10,  10,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [  5,   5,   5,   5,   5,   5,   5,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [  5,   5,   5,   5,   5,   5,   5,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10],
+     [-10, -10, -10, -10, -10, -10, -10,   5,   5,  10,   5,   5, -10, -10, -10, -10, -10, -10, -10]], 
     dtype='float64')
 
 @save_res
@@ -354,12 +359,6 @@ def find_curvature(img_input, name=''):
 @save_res
 def signed_curvature(x1, x2, y1, y2, name=''):
     res = np.divide((x1 * y2 - y1 * x2), np.power(x1*x1 + y1*y1, 1.5))
-    # print np.sum((x1 * y2 - y1 * x2) > 0)
-    # print np.sum(np.power(x1*x1 + y1*y1, 1.5) > 0)
-    # print np.sum(np.nan_to_num(res) > 0)
-    # print 'max: ', np.max(np.nan_to_num(res))
-    # print 'min: ', np.min(np.nan_to_num(res))
-    # print res.shape
     color = np.zeros(list(res.shape) + [3])
     for (i, j) in product(range(res.shape[0]), range(res.shape[1])):
         if res[i, j] > 0: color[i, j, 1] = res[i, j] * 255 * 255
@@ -466,18 +465,118 @@ def ConvHull(img_input, name=''):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-#openclose_first(imgray)
-#crop_first(imgray)
-Derivative_Curvature(Positive_Kernel_Derivative(), 'posfirst').find_curvature(imgray)
-Derivative_Curvature(Sobel_Derivative(), 'sobel').find_curvature(imgray)
-Derivative_Curvature(Scharr_Derivative(), 'scharr').find_curvature(imgray)
-Radius_Curvature().find_curvature(edging(imgray, name='edging'), name='radius_curvature')
-find_square_corner(edging(imgray), name='square_corner')
-print find_top_right_corner(edging(imgray), name='top_right')
-print find_top_left_corner(edging(imgray), name='top_left')
-print find_bottom_left_corner(edging(imgray), name='bottom_left')
-print find_bottom_right_corner(edging(imgray), name='bottom_right')
-#find_polygon_img(edging(imgray), name='polygon')
-#find_polygon_img(rectanglize(focus(imgray)), name='rectanglized_polygon')
-#ConvHull(imgray)
-#connect_to_img(np.array([[1, 1], [18, 18], [1, 18], [18, 1]]), [20, 20], name='square')
+dir_x = [0, 1, 1, 1, 0, -1, -1, -1]
+dir_y = [-1, -1, 0, 1, 1, 1, 0, -1]
+class Point(object):
+    def __init__(self, x_, y_):
+        self.x = x_
+        self.y = y_
+
+    def neighbor(self, idx):
+        return Point(self.x + dir_x[idx], self.y + dir_y[idx])
+
+    def __repr__(self):
+        return "(x: %s, y: %s)"%(str(self.x), str(self.y))
+
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.x == other.x and self.y == other.y
+        return False
+
+@save_res
+def BFS(img_input, src, dest, name=''):
+    queue = deque([src])
+    working_path = np.zeros(img_input.shape)
+
+    def is_avail(p):
+        return (img_input[p.y, p.x] > 0 or p == dest or p == src) and working_path[p.y, p.x] == 0
+
+    def mark(p):
+        working_path[p.y, p.x] = 255
+
+    while True:
+        cur = queue.popleft()
+        if not is_avail(cur): continue
+        mark(cur)
+        if cur == dest: return working_path
+        for i in range(len(dir_x)):
+            next_p = cur.neighbor(i)
+            queue.append(next_p)
+
+@save_res
+def edge_by_corner(img_input, point_a, point_b, name=''):
+    pA = Point(point_a[1], point_a[0])
+    pB = Point(point_b[1], point_b[0])
+    working_A_path = BFS(img_input, pA, pB)
+    working_B_path = BFS(img_input, pB, pA)
+    both_worked = working_A_path * working_B_path
+    res_img = np.zeros(img_input.shape)
+    for y, x in img_to_points(both_worked):
+        res_img[y, x] = 255
+    return res_img
+
+def edge_feature(img_input):
+    return cv2.HuMoments(cv2.moments(img_input)).flatten()
+
+def match_score(feature_A, feature_B, method=2):
+    def mize(h):
+        return np.sign(h) * np.log(np.abs(feature_A))
+    m_A = mize(feature_A)
+    m_B = mize(feature_B)
+    if method == 1:
+        return np.sum(np.abs(np.reciprocal(m_A) - np.reciprocal(m_B)))
+    elif method == 2:
+        return np.sum(np.abs(m_A - m_B))
+    elif method == 3:
+        return np.sum(np.abs(np.divide(m_A - m_B, m_A)))
+
+def shape_matching(img_A, img_B):
+    feature_A = edge_feature(img_A)
+    feature_B = edge_feature(img_B)
+    return match_score(feature_A, feature_B)
+
+
+@save_res
+def raw_to_edge(img_input, name=''):
+    pass
+
+# Load images
+raw_data_path = './data/raw_data/'
+img_path = raw_data_path + 'puzzle26082017_6.jpg'
+imgray = cv2.imread(img_path, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+rescan_path = raw_data_path + 'puzzle29082017.jpg'
+rescan = cv2.imread(rescan_path, cv2.CV_LOAD_IMAGE_GRAYSCALE)
+# openclose_first(imgray)
+# crop_first(imgray)
+# find_polygon_img(edging(imgray), name='polygon')
+# find_polygon_img(rectanglize(focus(imgray)), name='rectanglized_polygon')
+# ConvHull(imgray)
+# connect_to_img(np.array([[1, 1], [18, 18], [1, 18], [18, 1]]), [20, 20], name='square')
+# Derivative_Curvature(Positive_Kernel_Derivative(), 'posfirst').find_curvature(imgray)
+# Derivative_Curvature(Sobel_Derivative(), 'sobel').find_curvature(imgray)
+# Derivative_Curvature(Scharr_Derivative(), 'scharr').find_curvature(imgray)
+# Radius_Curvature().find_curvature(edging(imgray, name='edging'), name='radius_curvature')
+# find_square_corner(edging(imgray), name='square_corner')
+edged            = edging(imgray)
+top_right        = find_top_right_corner(edged, name='top_right')
+top_left         = find_top_left_corner(edged, name='top_left')
+bottom_left      = find_bottom_left_corner(edged, name='bottom_left')
+bottom_right     = find_bottom_right_corner(edged, name='bottom_right')
+top_left_right   = edge_by_corner(edged, top_left, top_right, name='top_left_right')
+bottom_left_right   = edge_by_corner(edged, bottom_left, bottom_right, name='bottom_left_right')
+right_top_bottom = edge_by_corner(edged, top_right, bottom_right, name='right_top_bottom')
+left_top_bottom = edge_by_corner(edged, top_left, bottom_left, name='left_top_bottom')
+# print edge_feature(top_left_right)
+# print edge_feature(right_top_bottom)
+# print edge_feature(right_top_bottom)
+# print edge_feature(left_top_bottom)
+edged_rescan          = edging(rescan, name='edged_rescan')
+rescan_top_right      = find_top_right_corner(edged_rescan, name='rescan_top_right')
+rescan_top_left       = find_top_left_corner(edged_rescan, name='rescan_top_left')
+print rescan_top_right, rescan_top_left
+rescan_top_left_right = edge_by_corner(edged_rescan, rescan_top_left, rescan_top_right, name='rescan_top_left_right')
+print shape_matching(top_left_right, rescan_top_left_right)
+# print shape_matching(top_left_right, bottom_left_right)
+# print shape_matching(top_left_right, right_top_bottom)
+# print shape_matching(top_left_right, left_top_bottom)
+# print shape_matching(left_top_bottom, right_top_bottom)
